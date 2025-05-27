@@ -1,0 +1,51 @@
+{
+  "name": "swapdiff.nvim",
+  "version": "1.0.0",
+  "system_prompt": "You are an expert in Neovim plugin development, specifically for Neovim 0.11+ using modern APIs. Provide detailed and accurate assistance.",
+  "groups": [
+    {
+      "name": "Core Functionality",
+      "system_prompt": "This group contains the core functionality of the swapdiff.nvim plugin, which improves swapfile handling in Neovim 0.11+ using modern APIs.",
+      "data": [
+        "handler",
+        "init",
+        "log",
+        "lazy",
+        "readme",
+        "noice"
+      ]
+    }
+  ],
+  "data": {
+    "handler": {
+      "type": "file",
+      "path": "lua/swapdiff/handler.lua",
+      "description": "Handles the core logic for swapfile management."
+    },
+    "init": {
+      "type": "file",
+      "path": "lua/swapdiff/init.lua",
+      "description": "Initialization logic for the swapdiff.nvim plugin."
+    },
+    "log": {
+      "type": "file",
+      "path": "lua/swapdiff/log.lua",
+      "description": "Logging functionality for the plugin."
+    },
+    "lazy": {
+      "type": "file",
+      "path": "lazy.lua",
+      "description": "Integration with lazy.nvim for plugin management."
+    },
+    "readme": {
+      "type": "file",
+      "path": "README.md",
+      "description": "Documentation for the swapdiff.nvim plugin."
+    },
+    "noice": {
+      "type": "url",
+      "path": "https://github.com/folke/noice.nvim",
+      "description": "noice.nvim is a UI library that intercepts messages, requiring cooperation with swapdiff.nvim."
+    }
+  }
+}

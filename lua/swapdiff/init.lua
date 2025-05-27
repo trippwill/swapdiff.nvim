@@ -3,6 +3,7 @@ local M = {}
 function M.setup()
   local api = vim.api
   local handlers = require('swapdiff.handler')
+  handlers.setup()
   api.nvim_create_autocmd('SwapExists', {
     group = handlers.augroup,
     pattern = '*',

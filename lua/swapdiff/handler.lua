@@ -1,12 +1,10 @@
 ---@class SwapDiffPending
 ---@field filename string
----@field swapfile string
----@field recovered_job? vim.SystemObj
----@field recoveredfile? string
----@field open_in_pid integer | false
+---@field swapfiles SwapDiffSwapInfo[]
 
 ---@class SwapDiffSwapInfo
----@field path string
+---@field filepath string
+---@field swappath string
 ---@field info table
 
 ---@private
@@ -15,10 +13,11 @@
 local M = {}
 
 local api, fn, v = vim.api, vim.fn, vim.v
-local _log = require('swapdiff.log').logger({
-  title = 'SwapDiff',
-  level = vim.log.levels.TRACE,
-})
+local util = require('swapdiff.util')
+local abs_path, tail_path, abs_dir = util.abs_path, util.tail_path, util.abs_dir
+local open_menu_window = require('swapdiff.ui').open_menu_window
+
+local _log = require('swapdiff.log').nil_logger()
 
 ---@private
 M.augroup = api.nvim_create_augroup('SwapDiff', { clear = true })
@@ -27,11 +26,174 @@ M.augroup = api.nvim_create_augroup('SwapDiff', { clear = true })
 ---@type SwapDiffPending?
 M.pending = nil
 
-local function abs_path(filename)
-  if not filename or filename == '' then
-    return ''
+---@type autocmd_callback
+local function onBufWipeout(args)
+  _log:printfn('onBufDelete called with args: %s', vim.inspect(args))
+
+  local tmpfile = args.match
+
+  _log:printf('Deleting temporary file %s', tmpfile)
+  fn.delete(tmpfile)
+end
+
+local function recover_swapfile(swapfile)
+  return coroutine.wrap(function()
+    local tmpfile = vim.fn.tempname()
+    print('Temporary file for recovery %s', tmpfile)
+
+    local cmd = {
+      'nvim',
+      '--noplugin', -- no config
+      '--headless',
+      '-n', -- no swapfile,
+      '-r',
+      string.format('+w! %s', tmpfile), -- write to a temporary file
+      '+q!', -- quit after writing
+      swapfile.swappath, -- swap file to recover
+    }
+
+    local co = coroutine.running()
+
+    -- Start vim.system and yield control
+    vim.system(cmd, { text = true }, function(out)
+      vim.schedule(function()
+        coroutine.resume(co, out)
+      end)
+    end)
+
+    -- Yield until vim.system callback resumes the coroutine
+    local out = coroutine.yield()
+
+    if out.code ~= 0 then
+      _log:warn('Failed to recover swapfile', swapfile.swappath, out.code, out.stderr)
+      vim.cmd.vnew()
+      api.nvim_buf_set_lines(0, 0, 0, false, { 'Failed to recover swapfile: ' .. swapfile.swappath, out.stderr })
+    else
+      _log:print('Recovered swapfile:', swapfile.swappath, 'to temporary file:', tmpfile)
+      vim.cmd('vert noswapfile diffsplit ' .. tmpfile)
+
+      local title = 'RECOVERED: ' .. tmpfile
+      vim.wo.winbar = title
+      vim.bo.readonly = true
+      vim.bo.modifiable = false
+      vim.bo.bufhidden = 'wipe'
+
+      local bufnr = api.nvim_get_current_buf()
+
+      api.nvim_buf_set_var(bufnr, 'swappath', swapfile.swappath)
+      api.nvim_create_autocmd('BufWipeout', {
+        buffer = bufnr,
+        once = true,
+        callback = onBufWipeout,
+      })
+    end
+  end)
+end
+
+---Validate the pending state before proceeding with recovery
+---@param pending SwapDiffPending?
+---@param abs_file string
+---@return string, SwapDiffSwapInfo[]
+local function validate_pending(pending, abs_file)
+  pending = assert(pending, 'SwapDiff pending state should not be nil when handling BufReadPost')
+  local filename = assert(pending.filename, 'SwapDiff pending state should have a filename')
+  assert(filename == abs_file, 'SwapDiff pending state filename should match the opened file')
+  local swapfiles = assert(pending.swapfiles, 'SwapDiff pending state should have swapfiles')
+  assert(#swapfiles > 0, 'SwapDiff pending state should have non-empty swapfiles')
+  return filename, swapfiles
+end
+
+local function start_recovery(args, filename, swapfiles)
+  vim.cmd.tabnew(args.file) -- Open the file in a new tab
+  vim.wo[0].winbar = 'CURRENT'
+
+  print('Recovering %d swapfiles for %s', #swapfiles, filename)
+
+  local main_win = vim.api.nvim_get_current_win()
+  vim.cmd('wincmd t')
+  open_menu_window({
+    {
+      desc = 'Delete all swapfiles and return to current file.',
+      callback = function()
+        _log:print('User chose to delete all swapfiles and edit file normally')
+        for _, swapfile in ipairs(swapfiles) do
+          _log:printf('Deleting swapfile: %s', swapfile.swappath)
+          fn.delete(swapfile.swappath) -- remove the swap file
+        end
+
+        -- Close the tab
+        pcall(vim.cmd('tabclose!'))
+      end,
+    },
+    {
+      desc = 'Exit recovery and return to current file.',
+      callback = function()
+        _log:print('User chose to exit recovery and return to current file')
+        -- Just close the tab, no further action needed
+        vim.cmd('tabclose!')
+      end,
+    },
+  }, {
+    ns = 'swapdiff_recovery_ns',
+    title = 'SwapDiff Recovery - Options:',
+    ft = 'swapdiff_recovery_ft',
+    trace = function(...)
+      _log:trace(...)
+    end,
+  })
+
+  vim.api.nvim_set_current_win(main_win)
+
+  -- Process all swapfiles sequentially
+  coroutine.wrap(function()
+    for _, swapfile in ipairs(swapfiles) do
+      recover_swapfile(swapfile)()
+    end
+
+    -- Work to do after all swapfiles are processed
+    _log:print('All swapfiles recovered.')
+
+    vim.schedule(function()
+      api.nvim_set_current_win(main_win)
+    end)
+  end)()
+end
+
+---@type autocmd_callback
+local function onBufReadPost(args)
+  _log:print('onBufReadPost called with args:', vim.inspect(args))
+  local ok, pending = pcall(vim.deepcopy, M.pending, true) -- noref
+  M.pending = nil
+  if not ok then
+    _log:critical('Failed to deepcopy pending state')
+    return
   end
-  return fn.fnamemodify(filename, ':p')
+
+  local filename, swapfiles = validate_pending(pending, abs_path(args.file))
+
+  vim.ui.select({
+    'Recover and diff all swapfiles',
+    'Edit file normally, leaving swapfiles intact',
+    'Delete all swapfiles and edit file normally',
+  }, {
+    prompt = string.format('SwapDiff: found %d dirty swapfiles for %s:', #swapfiles, tail_path(filename)),
+  }, function(item, idx)
+    _log:printf('User choice: %d %s', idx or -1, item)
+
+    if idx == 1 then
+      start_recovery(args, filename, swapfiles)
+    elseif idx == 2 then
+      return -- just open the file normally
+    elseif idx == 3 then
+      for _, swapfile in ipairs(swapfiles) do
+        _log:printf('Deleting swapfile: %s', swapfile.swappath)
+        fn.delete(swapfile.swappath) -- remove the swap file
+      end
+      return -- delete the swapfiles and open the file normally
+    else
+      return -- unexpected choice, do nothing
+    end
+  end)
 end
 
 ---@param filename string
@@ -39,241 +201,72 @@ end
 local function get_swapfiles_for_file(filename)
   local abs_filename = abs_path(filename)
   local swaps = fn.swapfilelist()
+
+  ---@type SwapDiffSwapInfo[]
   local results = {}
-
-  -- find where neovim stores swap files
-  local swap_dir = ''
-  if vim.o.directory then
-    --split on commas
-    local possible_dirs = vim.split(vim.o.directory, ',')
-    if #possible_dirs == 1 then
-      swap_dir = possible_dirs[1]
-    else
-      for _, dir in ipairs(possible_dirs) do
-        -- check if the directory exists and neovim can write to it
-        if fn.isdirectory(dir) == 1 and fn.filewritable(dir) == 2 then
-          swap_dir = dir
-          break
-        end
-      end
-    end
-  end
-
-  swap_dir = abs_path(swap_dir)
-
+  local swap_dir = abs_dir(v.swapname) .. '//' -- get the swap directory from the current swapname
   for _, swap in ipairs(swaps) do
-    local real_swap = swap:sub(#swap_dir > 0 and #swap_dir + 1 or 0)
-    local info = fn.swapinfo(abs_path(real_swap))
+    local abs_swap = abs_path(swap:sub(#swap_dir > 0 and #swap_dir + 1 or 0))
+
+    _log:printf('swap path transformed %s -> %s', swap, abs_swap)
+
+    local info = fn.swapinfo(abs_swap)
     local abs_fname = abs_path(info.fname)
     if info and abs_fname == abs_filename and info.dirty ~= 0 then
-      table.insert(results, { path = abs_fname, info = info })
+      table.insert(results, { filepath = abs_fname, info = info, swappath = abs_swap })
     end
   end
   return results
 end
 
----@param swapfile string
----@return vim.SystemObj, string
-local function recover_swapfile_async(swapfile)
-  local tmpfile = fn.tempname()
-  local cmd = {
-    'nvim',
-    '--headless',
-    '--noplugin',
-    '+recover',
-    ('"+w! %s"'):format(tmpfile),
-    '+q!',
-    swapfile,
-  }
-
-  local job = vim.system(cmd, { text = true })
-  return job, tmpfile
-end
-
----@param filename string
----@return boolean, fun() | vim.SystemObj
-function M.validate_pending(filename)
-  if not M.pending then
-    return false,
-      function()
-        _log:error('Unrecoverable: no pending swapfile recovery found for %s', filename)
-      end
-  end
-
-  if M.pending.filename ~= filename then
-    return false,
-      function()
-        _log:error('Unrecoverable: pending swapfile recovery does not match expected %s', filename)
-      end
-  end
-
-  if M.pending.open_in_pid then
-    return false,
-      function()
-        _log:info('File is open in another Neovim instance (PID: %d)', M.pending.open_in_pid)
-      end
-  end
-
-  local recovered_job = M.pending.recovered_job
-  if not recovered_job then
-    return false,
-      function()
-        _log:error('Unrecoverable: no pending swapfile recovery found for %s', filename)
-      end
-  end
-
-  return true, recovered_job
-end
-
----@type autocmd_callback
-local function onBufReadPost(args)
-  local filename = abs_path(args.file)
-
-  local valid, res = M.validate_pending(filename)
-  if not valid then
-    M.pending = nil
-    if type(res) == 'function' then
-      res()
-    end
-    return true
-  end
-
-  local recovered_job = res
-
-  -- Wait for recovery job if not done
-
-  local tmpfile = M.pending.recoveredfile
-  local completed_job = recovered_job:wait(1 * 1000)
-
-  local code = completed_job.code
-  if code ~= 0 then
-    _log:error('Swapfile recovery failed for %s\n%s', filename, vim.inspect(completed_job))
-    M.pending = nil
-    return true
-  end
-
-  if not tmpfile or fn.filereadable(tmpfile) == 1 then
-    _log:error('Recovered temp file not found or not readable: %s', tmpfile)
-    M.pending = nil
-    return true
-  end
-
-  -- Diff UI
-  vim.cmd('tabnew')
-  vim.cmd('edit ' .. fn.fnameescape(filename))
-  vim.wo.winbar = '[DISK] ' .. fn.fnamemodify(filename, ':t')
-  vim.cmd('vsplit ' .. fn.fnameescape(tmpfile))
-  vim.wo.winbar = '[RECOVERED] ' .. fn.fnamemodify(filename, ':t') .. ' (swap)'
-  vim.cmd('windo diffthis')
-  vim.cmd('wincmd h')
-
-  -- Prompt user for a decision
-  local choice = fn.input('Choose version to keep:\n[D]isk (left), [R]ecovered (right), [Q]uit: '):lower()
-  choice = choice:lower()
-
-  vim.cmd('tabclose')
-
-  if choice == 'r' then
-    -- Edit recovered as original (buffer name only, no write)
-    vim.cmd('edit ' .. fn.fnameescape(tmpfile))
-    vim.cmd('file ' .. fn.fnameescape(filename))
-  elseif choice == 'd' then
-    vim.cmd('edit ' .. fn.fnameescape(filename))
-  else
-    vim.cmd('quit')
-  end
-
-  fn.delete(tmpfile)
-  --fn.delete(M.pending.swapfile)
-
-  -- Clean up
-  M.pending = nil
-  return true
-end
-
 ---@type autocmd_callback
 function M.onSwapExists(args)
-  print('SwapDiff on_SwapExists called')
-  local filename = abs_path(args.file)
-  local swapfiles = get_swapfiles_for_file(filename)
+  _log:printfn(function()
+    return vim.inspect(vim.api.nvim_get_autocmds({ event = 'SwapExists' }))
+  end)
 
-  --  __trace('Swap files for %s: %s', filename, vim.inspect(swapfiles))
+  if v.swapchoice and v.swapchoice ~= '' then
+    _log:debug("vim.v.swapchoice is already set to '%s' for file '%s', skipping SwapDiff", v.swapchoice, args.file)
+    return
+  end
+
+  assert(M.pending == nil, 'SwapDiff: pending state should be nil before handling SwapExists')
+
+  local abs_file = abs_path(args.file)
+  local swapfiles = get_swapfiles_for_file(abs_file)
 
   if #swapfiles == 0 then
-    print('No swap files found for ', filename)
+    _log:trace('No dirty swapfiles found for %s', abs_file)
     return
   end
 
-  if #swapfiles == 1 then
-    local swapfile = swapfiles[1]
+  _log:trace('Found %i dirty swapfiles for %s', #swapfiles, abs_file)
 
-    if swapfile.info.pid and swapfile.info.pid ~= 0 then
-      _log:trace('Swap file %s is open in another Neovim instance (PID: %d).', swapfile.path, swapfile.info.pid)
-      -- File is open in another Neovim instance
-      M.pending = {
-        filename = filename,
-        swapfile = swapfile.path,
-        open_in_pid = swapfile.info.pid,
-      }
-      return
-    end
-  end
+  M.pending = {
+    filename = abs_file,
+    swapfiles = swapfiles,
+  }
 
-  local prompt = ('**SwapDiff** Swap file detected for %s.\n[S]wapDiff [O]pen Readonly [R]ecover [E]dit Anyway [D]elete Swapfile [Q]uit [A]bort: '):format(
-    filename
-  )
-  local resp = fn.input(prompt):lower()
+  -- Set up BufReadPost autocmd for handling recovery and diff
+  api.nvim_create_autocmd('BufReadPost', {
+    pattern = abs_file,
+    once = true,
+    callback = onBufReadPost,
+  })
 
-  if resp == 's' then
-    local select_swapfile = function(cb)
-      if #swapfiles == 1 then
-        cb(swapfiles[1])
-      else
-        local items = vim.tbl_map(function(s)
-          local inf = s.info
-          return string.format(
-            '%s [dirty:%s mtime:%s pid:%d]',
-            s.path,
-            inf.dirty == 1 and 'yes' or 'no',
-            os.date('%c', inf.mtime or 0),
-            inf.pid or 0
-          )
-        end, swapfiles)
-        vim.ui.select(items, { prompt = 'Select swapfile to diff:' }, function(_, idx)
-          if idx then
-            cb(swapfiles[idx])
-          end
-        end)
-      end
-    end
+  v.swapchoice = 'e' -- Open the file normally
+end
 
-    select_swapfile(function(selected)
-      if not selected then
-        v.swapchoice = 'q'
-        return
-      end
-      M.pending = {
-        filename = filename,
-        swapfile = selected.path,
-        open_in_pid = false,
-      }
-      -- Async recovery
-      M.pending.recovered_job, M.pending.recoveredfile = recover_swapfile_async(selected.path)
+M.defaults = {
+  log_level = vim.log.levels.INFO, -- Default log level
+}
 
-      -- Set up BufReadPost for just this file, once
-      api.nvim_create_autocmd('BufReadPost', {
-        pattern = filename,
-        once = true,
-        callback = onBufReadPost,
-      })
-      -- Open readonly buffer for diffing
-      v.swapchoice = 'o'
-    end)
-    return
-  end
-
-  local valid = { o = true, r = true, e = true, d = true, q = true, a = true }
-  v.swapchoice = valid[resp] and resp or ''
+function M.setup(opts)
+  M.config = vim.tbl_deep_extend('force', M.defaults, opts or {})
+  _log = require('swapdiff.log').logger({
+    title = 'SwapDiff',
+    level = M.config.log_level,
+  })
 end
 
 return M
