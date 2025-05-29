@@ -33,4 +33,12 @@ function M.abs_dir(filepath)
   return fn.fnamemodify(filepath, ':p:h')
 end
 
+function M.remove_prefix(prefix, str)
+  if str:sub(1, #prefix) == prefix then
+    return str:sub(#prefix + 1)
+  else
+    return str
+  end
+end
+
 return M

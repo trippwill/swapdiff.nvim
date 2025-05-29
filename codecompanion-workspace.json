@@ -1,6 +1,6 @@
 {
   "name": "swapdiff.nvim",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "system_prompt": "You are an expert in Neovim plugin development, specifically for Neovim 0.11+ using modern APIs. Provide detailed and accurate assistance.",
   "groups": [
     {
@@ -8,8 +8,12 @@
       "system_prompt": "This group contains the core functionality of the swapdiff.nvim plugin, which improves swapfile handling in Neovim 0.11+ using modern APIs.",
       "data": [
         "handler",
+        "handlers",
         "init",
         "log",
+        "types",
+        "ui",
+        "util",
         "lazy",
         "readme",
         "noice"
@@ -22,6 +26,11 @@
       "path": "lua/swapdiff/handler.lua",
       "description": "Handles the core logic for swapfile management."
     },
+    "handlers": {
+      "type": "file",
+      "path": "lua/swapdiff/handlers.lua",
+      "description": "Manages multiple handlers for swapfile operations."
+    },
     "init": {
       "type": "file",
       "path": "lua/swapdiff/init.lua",
@@ -31,6 +40,21 @@
       "type": "file",
       "path": "lua/swapdiff/log.lua",
       "description": "Logging functionality for the plugin."
+    },
+    "types": {
+      "type": "file",
+      "path": "lua/swapdiff/types.lua",
+      "description": "Defines types and structures used in the plugin."
+    },
+    "ui": {
+      "type": "file",
+      "path": "lua/swapdiff/ui.lua",
+      "description": "Handles user interface elements for the plugin."
+    },
+    "util": {
+      "type": "file",
+      "path": "lua/swapdiff/util.lua",
+      "description": "Utility functions for common operations in the plugin."
     },
     "lazy": {
       "type": "file",

@@ -1,11 +1,28 @@
 return {
   'trippwill/swapdiff.nvim',
   dependencies = {
-    'folke/noice.nvim',
+    {
+      'folke/snacks.nvim',
+    },
+    {
+      'folke/noice.nvim',
+      optional = true,
+    },
+    {
+      'akinsho/bufferline.nvim',
+      optional = true,
+    },
   },
+  opts = {},
   init = function()
-    print('SwapDiff: Initializing...')
-    local swapdiff = require('swapdiff')
-    swapdiff.setup()
+    local api = vim.api
+    local augrp_id = api.nvim_create_augroup('swapdiff-augrp', { clear = true })
+    api.nvim_create_autocmd('SwapExists', {
+      group = augrp_id,
+      pattern = '*',
+      callback = function(args)
+        require('swapdiff').onSwapExists(args)
+      end,
+    })
   end,
 }
