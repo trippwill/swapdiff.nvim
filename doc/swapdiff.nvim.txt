@@ -1,0 +1,203 @@
+==============================================================================
+SwapDiff Types                                                  *swapdiff.types*
+
+SwapDiffPending                                *swapdiff.module.SwapDiffPending*
+
+    Fields: ~
+        {filename}   (string)
+        {swapfiles}  (SwapDiffSwapInfo[])
+
+
+SwapDiffSwapInfo                              *swapdiff.module.SwapDiffSwapInfo*
+
+    Fields: ~
+        {filepath}  (string)
+        {swappath}  (string)
+        {info}      (table)
+
+
+==============================================================================
+SwappDiff Module                                               *swapdiff.module*
+
+M.onSwapExists({args})                            *swapdiff.module.onSwapExists*
+    Callback for the SwapExists autocmd
+
+    Parameters: ~
+        {args}  (AutoCmdArgs)
+
+
+SwapDiffConfig                                  *swapdiff.module.SwapDiffConfig*
+
+    Fields: ~
+        {auto_prompt}  (boolean)
+
+
+M.setup({opts})                                          *swapdiff.module.setup*
+    Initialize the SwapDiff module with options
+
+    Parameters: ~
+        {opts}  (SwapDiffConfig)
+
+
+==============================================================================
+SwapDiff Bufferline Integration                      *swapdiff.bufferline.intro*
+
+Provides a function to replace the default bufferline.nvim go_to function,
+which ensures that SwapExists is triggered if necessary.
+
+==============================================================================
+SwapDiff Bufferline Module                          *swapdiff.bufferline.module*
+
+M.go_to()                                     *swapdiff.bufferline.module.go_to*
+
+
+==============================================================================
+Utility Functions for SwapDiff                                   *swapdiff.util*
+
+M.abs_path({filename})                                  *swapdiff.util.abs_path*
+    Get the absolute path of a file.
+
+    Parameters: ~
+        {filename}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.tail_path({filepath})                                *swapdiff.util.tail_path*
+    Get the file name without the directory path.
+
+    Parameters: ~
+        {filepath}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.abs_dir({filepath})                                    *swapdiff.util.abs_dir*
+    Get the absolute directory path of a file.
+
+    Parameters: ~
+        {filepath}  (string)
+
+    Returns: ~
+        (string)
+
+
+M.remove_prefix({prefix}, {str})                   *swapdiff.util.remove_prefix*
+    Remove a prefix from a string.
+
+    Parameters: ~
+        {prefix}  (string)
+        {str}     (string)
+
+    Returns: ~
+        (string)
+
+
+==============================================================================
+Introduction                                                         *log.intro*
+
+USAGE EXAMPLES
+
+>
+    local log = require('swapdiff.log')
+
+    -- Create a logger with a title
+    local logger = log.Logger:new('MyPlugin')
+
+    -- Add a file sink for INFO and above
+    logger:add_sink(vim.log.levels.INFO, log.FileLogSink:new('/tmp/myplugin.log'))
+
+    -- Add a Vim message sink for WARN and above
+    logger:add_sink(vim.log.levels.WARN, log.VimLogSink:new())
+
+    -- Simple logging
+    logger:info('Plugin loaded: %s', 'MyPlugin')
+    logger:warn('Something might be wrong: %s', 'details')
+
+    -- Lazy logging (expensive computation only if needed)
+    logger:debug_lazy(function()
+     return string.format('Debug info: %s', vim.inspect({foo = 'bar'}))
+    end)
+
+    -- Critical logging (logs and raises error)
+    logger:critical('Fatal error: %s', 'something bad')
+    -- or lazy:
+    logger:critical_lazy(function() return 'Fatal error: ' .. tostring(something) end)
+
+    -- Enable/disable logging
+    logger:enable(false) -- disables all logging
+    logger:enable(true)  -- enables logging
+<
+
+==============================================================================
+Types                                                                *log.types*
+
+Signature for log methods.
+fun(self: LogSink, level: vim.log.levels, fmt: string, ...: any?)
+
+LogMethod                                                 *log.module.LogMethod*
+
+    Type: ~
+        fun
+
+
+Interface for log sinks.
+Override log method to customize logging behavior.
+
+LogSink                                                     *log.module.LogSink*
+
+    Fields: ~
+        {title}  (string)
+        {log}    (LogMethod)  Log a message at the specified level.
+
+
+==============================================================================
+Sinks                                                                *log.sinks*
+
+FileLogSink : LogSink                                   *log.module.FileLogSink*
+
+    Fields: ~
+        {file_path}  (string)  The path to the log file.
+
+
+VimLogSink : LogSink                                     *log.module.VimLogSink*
+
+    Fields: ~
+        {prefix}  (string)  The prefix for the log messages.
+
+
+NotifyLogSink : LogSink                               *log.module.NotifyLogSink*
+
+
+BufferLogSink : LogSink                               *log.module.BufferLogSink*
+
+    Fields: ~
+        {buffer}  (number)  The buffer number for the log messages.
+
+
+==============================================================================
+Logger                                                              *log.logger*
+
+Logger                                                       *log.module.Logger*
+
+    Fields: ~
+        {title}  (string)  The title for the logger, used in log messages.
+        {sinks}  (table)
+
+
+==============================================================================
+Log Module                                                          *log.module*
+
+LogModule                                                 *log.module.LogModule*
+
+    Fields: ~
+        {Logger}         (Logger)         Logger with convenience methods for logging to LogSinks.
+        {FileLogSink}    (FileLogSink)    File sink for logging to a file.
+        {VimLogSink}     (VimLogSink)     Vim message sink for logging to Vim's message area.
+        {NotifyLogSink}  (NotifyLogSink)  Notify sink for logging using Vim's notify function.
+        {BufferLogSink}  (BufferLogSink)  Buffer sink for logging to a scratch buffer.
+
+
+vim:tw=78:ts=8:noet:ft=help:norl:

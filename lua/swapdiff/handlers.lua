@@ -1,10 +1,7 @@
 ---@class PrimaryBufferHandler
----@field _pending? SwapDiffPending
----@field _log Logger
-local PrimaryBufferHandler = {
-  _pending = nil,
-  _log = require('swapdiff.log').nil_logger(),
-}
+---@field private _pending? SwapDiffPending
+---@field private _log Logger
+local PrimaryBufferHandler = {}
 
 ---Constructor for PrimaryBufferHandler
 ---@param self PrimaryBufferHandler
@@ -13,7 +10,7 @@ local PrimaryBufferHandler = {
 ---@return PrimaryBufferHandler
 function PrimaryBufferHandler:new(log, pending)
   local obj = setmetatable({}, { __index = self })
-  obj._log = log or require('swapdiff.log').nil_logger()
+  obj._log = log
   obj._pending = pending
   return obj
 end
@@ -28,14 +25,14 @@ function PrimaryBufferHandler:onBufWinEnter(args, force)
   local abs_path = require('swapdiff.util').abs_path
   local tail_path = require('swapdiff.util').tail_path
 
-  --  _log:print('onBufWinEnter called with args:', vim.inspect(args))
+  _log:trace('onBufWinEnter called with args:', vim.inspect(args))
 
   local filename, swapfiles = self:validate_pending(abs_path(args.file))
 
   if not force then
     local ok, res = pcall(vim.api.nvim_buf_get_var, args.buf, 'swapdiff_choice')
     if ok and res ~= nil then
-      _log:debug("swapdiff_choice is already set for file '%s', skipping SwapDiff", tail_path(filename))
+      _log:debug("swapdiff_choice is already set for file '%s', skipping SwapDiffRecover prompt", tail_path(filename))
       return
     end
   end
@@ -47,8 +44,8 @@ function PrimaryBufferHandler:onBufWinEnter(args, force)
       'Delete all swapfiles and edit file normally',
     }, {
       prompt = string.format('SwapDiff: found %d dirty swapfile(s) for %s:', #swapfiles, tail_path(filename)),
-    }, function(_, idx)
-      --_log:printf('User choice: %d %s', idx or -1, item)
+    }, function(item, idx)
+      _log:trace('User choice: %d %s', idx or -1, item)
 
       vim.api.nvim_buf_set_var(args.buf, 'swapdiff_choice', idx or -1)
 
@@ -58,7 +55,7 @@ function PrimaryBufferHandler:onBufWinEnter(args, force)
         return
       elseif idx == 3 then -- delete all swapfiles and open the file normally
         for _, swapfile in ipairs(swapfiles) do
-          _log:notify('Deleting swapfile: %s', swapfile.swappath)
+          vim.notify('Deleting swapfile: ' .. swapfile.swappath, vim.log.levels.INFO, { title = 'SwapDiff' })
           fn.delete(swapfile.swappath) -- remove the swap file
         end
         return

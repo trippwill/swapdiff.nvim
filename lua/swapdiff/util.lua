@@ -1,3 +1,4 @@
+---@mod swapdiff.util Utility Functions for SwapDiff
 local M = {}
 
 local fn = vim.fn
@@ -33,6 +34,10 @@ function M.abs_dir(filepath)
   return fn.fnamemodify(filepath, ':p:h')
 end
 
+---Remove a prefix from a string.
+---@param prefix string
+---@param str string
+---@return string
 function M.remove_prefix(prefix, str)
   if str:sub(1, #prefix) == prefix then
     return str:sub(#prefix + 1)

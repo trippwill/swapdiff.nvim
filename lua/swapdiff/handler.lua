@@ -1,6 +1,3 @@
----@private
----@alias autocmd_callback fun(args: vim.api.keyset.create_autocmd.callback_args): nil | boolean
-
 local M = {}
 
 local api, fn = vim.api, vim.fn
@@ -13,25 +10,24 @@ M.augroup = api.nvim_create_augroup('SwapDiff', { clear = true })
 ---@type SwapDiffPending?
 M.pending = nil
 
-local _log = require('swapdiff.log').logger({
-  level = vim.log.levels.INFO,
-  name = 'swapdiff.handler',
-})
+local log = require('swapdiff.log')
+local _log = log.Logger:new('SwapDiff')
+_log:add_sink(vim.log.levels.TRACE, log.BufferLogSink:new())
+_log:add_sink(vim.log.levels.DEBUG, log.NotifyLogSink:new())
 
----@type autocmd_callback
+---@param args AutoCmdArgs
 local function onBufWipeout(args)
-  _log:printfn('onBufDelete called with args: %s', vim.inspect(args))
-
+  _log:trace('onBufDelete called with args: %s', vim.inspect(args))
   local tmpfile = args.match
 
-  _log:printf('Deleting temporary file %s', tmpfile)
+  _log:trace('Deleting temporary file %s', tmpfile)
   fn.delete(tmpfile)
 end
 
 local function recover_swapfile(swapfile)
   return coroutine.wrap(function()
     local tmpfile = vim.fn.tempname()
-    print('Temporary file for recovery %s', tmpfile)
+    _log:trace('Temporary file for recovery %s', tmpfile)
 
     local cmd = {
       'nvim',
@@ -61,7 +57,7 @@ local function recover_swapfile(swapfile)
       vim.cmd.vnew()
       api.nvim_buf_set_lines(0, 0, 0, false, { 'Failed to recover swapfile: ' .. swapfile.swappath, out.stderr })
     else
-      _log:print('Recovered swapfile:', swapfile.swappath, 'to temporary file:', tmpfile)
+      _log:trace('Recovered swapfile:', swapfile.swappath, 'to temporary file:', tmpfile)
       vim.cmd('vert noswapfile diffsplit ' .. tmpfile)
 
       local title = 'RECOVERED: ' .. tmpfile
@@ -94,9 +90,9 @@ function M.start_recovery(args, filename, swapfiles)
     {
       desc = 'Delete all swapfiles and return to current file.',
       callback = function()
-        _log:print('User chose to delete all swapfiles and edit file normally')
+        _log:trace('User chose to delete all swapfiles and edit file normally')
         for _, swapfile in ipairs(swapfiles) do
-          _log:printf('Deleting swapfile: %s', swapfile.swappath)
+          _log:trace('Deleting swapfile: %s', swapfile.swappath)
           fn.delete(swapfile.swappath) -- remove the swap file
         end
 
@@ -107,7 +103,7 @@ function M.start_recovery(args, filename, swapfiles)
     {
       desc = 'Exit recovery and return to current file.',
       callback = function()
-        _log:print('User chose to exit recovery and return to current file')
+        _log:trace('User chose to exit recovery and return to current file')
         -- Just close the tab, no further action needed
         vim.cmd('tabclose!')
       end,
@@ -130,7 +126,7 @@ function M.start_recovery(args, filename, swapfiles)
     end
 
     -- Work to do after all swapfiles are processed
-    _log:print('All swapfiles recovered.')
+    _log:trace('All swapfiles recovered.')
 
     vim.schedule(function()
       api.nvim_set_current_win(main_win)

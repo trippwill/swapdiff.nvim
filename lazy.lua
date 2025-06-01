@@ -12,6 +12,10 @@ return {
       'akinsho/bufferline.nvim',
       optional = true,
     },
+    {
+      'nvim-lua/plenary.nvim',
+      optional = true,
+    },
   },
   opts = {},
   init = function()
