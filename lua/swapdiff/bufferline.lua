@@ -1,10 +1,8 @@
----@mod swapdiff.bufferline.intro SwapDiff Bufferline Integration
+---@mod swapdiff.bufferline SwapDiff Bufferline Integration
 ---@brief [[
 ---Provides a function to replace the default bufferline.nvim go_to function,
 ---which ensures that SwapExists is triggered if necessary.
 ---@brief ]]
-
----@mod swapdiff.bufferline.module SwapDiff Bufferline Module
 
 local M = {}
 
@@ -42,9 +40,6 @@ function M.go_to(num, absolute)
 
   local bufnr = element.id
   if not vim.api.nvim_buf_is_loaded(bufnr) then
-    -- This will properly trigger SwapExists, etc.
-    local filename = vim.api.nvim_buf_get_name(bufnr)
-    print('Buffer not loaded, opening:', filename)
     vim.cmd('buffer ' .. bufnr)
   else
     vim.api.nvim_set_current_buf(bufnr)

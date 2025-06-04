@@ -1,29 +1,37 @@
 #!/bin/sh
+set -e
 
-# Generate documentation for the swapdiff.nvim plugin using vimcats.
-# $ sh doc.sh
+# Generate documentation for a Neovim plugin using vimcats.
+# $ sh doc.sh path/to/outfile.txt path/to/filelist
 
-OUTPUT_DIR="${OUTPUT_DIR:-$PWD/doc}"
-OUTPUT_FILE="${OUTPUT_FILE:-$OUTPUT_DIR/swapdiff.nvim.txt}"
-INPUT_DIR="${INPUT_DIR:-lua/swapdiff}"
-INPUT_FILES="${INPUT_FILES:-types init handlers bufferline util log}"
 VIMCATS_ARGS="${VIMCATS_ARGS:--fact}"
-
-mkdir -p "$OUTPUT_DIR"
+FILE_LIST="${2:-doclist}"
+OUTPUT_FILE="${1:-doc/plugin.txt}"
 
 if ! command -v vimcats >/dev/null 2>&1; then
-  echo "vimcats is not installed. Installing it now..."
+  echo "vimcats is not installed."
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "cargo is not installed. Please install Rust and Cargo first."
+    exit 1
+  fi
+  echo "Installing vimcats now..."
   cargo install vimcats --features=cli
 fi
 
 set --
-for file in $INPUT_FILES; do
-  if [ -f "$INPUT_DIR/$file.lua" ]; then
-    set -- "$@" "$INPUT_DIR/$file.lua"
+while IFS= read -r file; do
+  if [ -f "$file" ]; then
+    set -- "$@" "$file"
   else
-    echo "Warning: File $INPUT_DIR/$file.lua does not exist."
+    echo "Warning: '$file' does not exist or is not a regular file."
   fi
-done
+
+done <"$FILE_LIST"
+
+if [ $# -eq 0 ]; then
+  echo "No valid files found in '$FILE_LIST'. Exiting."
+  exit 1
+fi
 
 vimcats "$VIMCATS_ARGS" "$@" >"$OUTPUT_FILE"
 

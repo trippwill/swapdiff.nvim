@@ -1,30 +1,43 @@
-local M = {}
+---@mod swapdiff.recoverytabhandler RecoveryTabHandler Module
+---@brief [[
+---Support module for managing recovery tabs in SwapDiff.
+---@brief ]]
+
+---@class RecoveryTabHandler
+---@field private _augroup integer
+---@field _log Logger
+---@field _pending SwapDiffBuffer?
+local RecoveryTabHandler = {}
 
 local api, fn = vim.api, vim.fn
 local open_menu_window = require('swapdiff.ui').open_menu_window
+local util = require('swapdiff.util')
+local tail_path, assert_pending = util.tail_path, util.assert_pending
+
+function RecoveryTabHandler:new(log, pending)
+  local obj = setmetatable({}, { __index = self })
+  obj._augroup = api.nvim_create_augroup('SwapDiffRecovery', { clear = false })
+  obj._log = log or require('tmi.Logger'):empty()
+  obj._pending = pending
+  return obj
+end
 
 ---@private
-M.augroup = api.nvim_create_augroup('SwapDiff', { clear = true })
-
----@private
----@type SwapDiffPending?
-M.pending = nil
-
-local log = require('swapdiff.log')
-local _log = log.Logger:new('SwapDiff')
-_log:add_sink(vim.log.levels.TRACE, log.BufferLogSink:new())
-_log:add_sink(vim.log.levels.DEBUG, log.NotifyLogSink:new())
-
 ---@param args AutoCmdArgs
-local function onBufWipeout(args)
-  _log:trace('onBufDelete called with args: %s', vim.inspect(args))
+function RecoveryTabHandler:onBufWipeout(args)
+  self._log:trace('onBufDelete called with args: %s', vim.inspect(args))
   local tmpfile = args.match
 
-  _log:trace('Deleting temporary file %s', tmpfile)
+  self._log:trace('Deleting temporary file %s', tmpfile)
   fn.delete(tmpfile)
 end
 
-local function recover_swapfile(swapfile)
+---@private
+---@param swapfile SwapDiffSwapInfo
+function RecoveryTabHandler:recover_swapfile(swapfile)
+  local _log = self._log
+
+  ---@async
   return coroutine.wrap(function()
     local tmpfile = vim.fn.tempname()
     _log:trace('Temporary file for recovery %s', tmpfile)
@@ -57,7 +70,7 @@ local function recover_swapfile(swapfile)
       vim.cmd.vnew()
       api.nvim_buf_set_lines(0, 0, 0, false, { 'Failed to recover swapfile: ' .. swapfile.swappath, out.stderr })
     else
-      _log:trace('Recovered swapfile:', swapfile.swappath, 'to temporary file:', tmpfile)
+      _log:trace('Recovered swapfile: %s to temporary file %s', swapfile.swappath, tmpfile)
       vim.cmd('vert noswapfile diffsplit ' .. tmpfile)
 
       local title = 'RECOVERED: ' .. tmpfile
@@ -72,17 +85,22 @@ local function recover_swapfile(swapfile)
       api.nvim_create_autocmd('BufWipeout', {
         buffer = bufnr,
         once = true,
-        callback = onBufWipeout,
+        callback = function(args)
+          self:onBufWipeout(args)
+        end,
       })
     end
   end)
 end
 
-function M.start_recovery(args, filename, swapfiles)
-  vim.cmd.tabnew(args.file) -- Open the file in a new tab
-  vim.wo[0].winbar = 'CURRENT'
-
-  print('Recovering %d swapfiles for %s', #swapfiles, filename)
+---@async
+---@param fpath string expected absolute file path to recover
+function RecoveryTabHandler:start_recovery(fpath)
+  local _log = self._log
+  local filename, _, swapfiles = assert_pending(self._pending, fpath)
+  vim.cmd.tabnew(filename) -- Open the file in a new tab
+  vim.wo[0].winbar = 'CURRENT: ' .. tail_path(filename)
+  _log:info('Recovering %d swapfiles for %s', #swapfiles, filename)
 
   local main_win = vim.api.nvim_get_current_win()
   vim.cmd('wincmd t')
@@ -122,7 +140,7 @@ function M.start_recovery(args, filename, swapfiles)
   -- Process all swapfiles sequentially
   coroutine.wrap(function()
     for _, swapfile in ipairs(swapfiles) do
-      recover_swapfile(swapfile)()
+      self:recover_swapfile(swapfile)()
     end
 
     -- Work to do after all swapfiles are processed
@@ -134,4 +152,4 @@ function M.start_recovery(args, filename, swapfiles)
   end)()
 end
 
-return M
+return RecoveryTabHandler

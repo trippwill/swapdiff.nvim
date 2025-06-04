@@ -1,0 +1,12 @@
+lua/swapdiff/init.lua
+lua/swapdiff/types.lua
+lua/swapdiff/PrimaryBufferHandler.lua
+lua/swapdiff/RecoveryTabHandler.lua
+lua/swapdiff/bufferline.lua
+lua/swapdiff/util.lua
+lua/tmi/LogSink.lua
+lua/tmi/Logger.lua
+lua/tmi/PrintLogSink.lua
+lua/tmi/FileLogSink.lua
+lua/tmi/NotifyLogSink.lua
+lua/tmi/BufferLogSink.lua

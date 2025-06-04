@@ -17,6 +17,11 @@ return {
       optional = true,
     },
   },
+  cmd = {
+    'SwapDiff',
+    'SwapDiffLog',
+  },
+  event = 'SwapExists',
   opts = {},
   init = function()
     local api = vim.api

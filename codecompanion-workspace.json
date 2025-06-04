@@ -1,45 +1,61 @@
 {
   "name": "swapdiff.nvim",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "system_prompt": "You are an expert in Neovim plugin development, specifically for Neovim 0.11+ using modern APIs. Provide detailed and accurate assistance.",
   "groups": [
     {
-      "name": "Core Functionality",
+      "name": "Core Plugin Functionality",
       "system_prompt": "This group contains the core functionality of the swapdiff.nvim plugin, which improves swapfile handling in Neovim 0.11+ using modern APIs.",
       "data": [
-        "handler",
-        "handlers",
         "init",
-        "log",
         "types",
         "ui",
         "util",
+        "PrimaryBufferHandler",
+        "RecoveryTabHandler",
+        "bufferline",
         "lazy",
+        "doc_sh",
+        "doclist"
+      ]
+    },
+    {
+      "name": "Logging Subsystem (tmi)",
+      "system_prompt": "This group contains the tmi logging subsystem, which provides logging utilities for swapdiff.nvim and potentially other plugins.",
+      "data": [
+        "BufferLogSink",
+        "FileLogSink",
+        "LogSink",
+        "Logger",
+        "NotifyLogSink",
+        "PrintLogSink",
+        "tmi_util"
+      ]
+    },
+    {
+      "name": "Tests",
+      "system_prompt": "This group contains tests for swapdiff.nvim and its logging subsystem.",
+      "data": [
+        "util_spec",
+        "Logger_spec",
+        "test_sh"
+      ]
+    },
+    {
+      "name": "Documentation & Integration",
+      "system_prompt": "This group contains documentation and integration references for swapdiff.nvim.",
+      "data": [
         "readme",
-        "noice"
+        "docfile",
+        "stylua_toml"
       ]
     }
   ],
   "data": {
-    "handler": {
-      "type": "file",
-      "path": "lua/swapdiff/handler.lua",
-      "description": "Handles the core logic for swapfile management."
-    },
-    "handlers": {
-      "type": "file",
-      "path": "lua/swapdiff/handlers.lua",
-      "description": "Manages multiple handlers for swapfile operations."
-    },
     "init": {
       "type": "file",
       "path": "lua/swapdiff/init.lua",
       "description": "Initialization logic for the swapdiff.nvim plugin."
-    },
-    "log": {
-      "type": "file",
-      "path": "lua/swapdiff/log.lua",
-      "description": "Logging functionality for the plugin."
     },
     "types": {
       "type": "file",
@@ -56,20 +72,100 @@
       "path": "lua/swapdiff/util.lua",
       "description": "Utility functions for common operations in the plugin."
     },
+    "PrimaryBufferHandler": {
+      "type": "file",
+      "path": "lua/swapdiff/PrimaryBufferHandler.lua",
+      "description": "Handles primary buffer swapfile management logic."
+    },
+    "RecoveryTabHandler": {
+      "type": "file",
+      "path": "lua/swapdiff/RecoveryTabHandler.lua",
+      "description": "Handles recovery tab logic for swapfile management."
+    },
+    "bufferline": {
+      "type": "file",
+      "path": "lua/swapdiff/bufferline.lua",
+      "description": "Manages bufferline integration for swapdiff.nvim."
+    },
     "lazy": {
       "type": "file",
       "path": "lazy.lua",
       "description": "Integration with lazy.nvim for plugin management."
+    },
+    "doc_sh": {
+      "type": "file",
+      "path": "doc.sh",
+      "description": "Shell script to generate documentation for the plugin using vimcats."
+    },
+    "doclist": {
+      "type": "file",
+      "path": "doclist",
+      "description": "List of source files to include in generated documentation."
+    },
+    "BufferLogSink": {
+      "type": "file",
+      "path": "lua/tmi/BufferLogSink.lua",
+      "description": "tmi logging: Sends log output to a Neovim buffer."
+    },
+    "FileLogSink": {
+      "type": "file",
+      "path": "lua/tmi/FileLogSink.lua",
+      "description": "tmi logging: Sends log output to a file."
+    },
+    "LogSink": {
+      "type": "file",
+      "path": "lua/tmi/LogSink.lua",
+      "description": "tmi logging: Base class/interface for log sinks."
+    },
+    "Logger": {
+      "type": "file",
+      "path": "lua/tmi/Logger.lua",
+      "description": "tmi logging: Main logger implementation."
+    },
+    "NotifyLogSink": {
+      "type": "file",
+      "path": "lua/tmi/NotifyLogSink.lua",
+      "description": "tmi logging: Sends log output as Neovim notifications."
+    },
+    "PrintLogSink": {
+      "type": "file",
+      "path": "lua/tmi/PrintLogSink.lua",
+      "description": "tmi logging: Sends log output to the Neovim message area."
+    },
+    "tmi_util": {
+      "type": "file",
+      "path": "lua/tmi/util.lua",
+      "description": "tmi logging: Utility functions for the logging subsystem."
+    },
+    "util_spec": {
+      "type": "file",
+      "path": "tests/swapdiff/util_spec.lua",
+      "description": "Test suite for swapdiff.nvim utility functions."
+    },
+    "Logger_spec": {
+      "type": "file",
+      "path": "tests/tmi/Logger_spec.lua",
+      "description": "Test suite for the tmi Logger."
+    },
+    "test_sh": {
+      "type": "file",
+      "path": "test.sh",
+      "description": "Shell script to run the test suite using Neovim and Plenary."
     },
     "readme": {
       "type": "file",
       "path": "README.md",
       "description": "Documentation for the swapdiff.nvim plugin."
     },
-    "noice": {
-      "type": "url",
-      "path": "https://github.com/folke/noice.nvim",
-      "description": "noice.nvim is a UI library that intercepts messages, requiring cooperation with swapdiff.nvim."
+    "docfile": {
+      "type": "file",
+      "path": "doc/swapdiff.nvim.txt",
+      "description": "Vim help documentation for swapdiff.nvim."
+    },
+    "stylua_toml": {
+      "type": "file",
+      "path": "stylua.toml",
+      "description": "Configuration file for stylua code formatter."
     }
   }
 }

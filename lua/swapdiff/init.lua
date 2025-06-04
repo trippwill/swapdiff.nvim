@@ -1,46 +1,89 @@
+---@mod swapdiff.intro SwapDiff Introduction
+---@tag :SwapDiff
+---@tag :SwapDiffLog
+---@brief [[
+---SwapDiff is a Neovim plugin providing advanced swap file management and recovery features.
+---It enhances the default swap file conflict prompt by allowing users to interactively review,
+---diff, and recover changes from swap files. SwapDiff integrates with Neovim's event system to
+---detect swap file conflicts, provides user-friendly prompts, and offers tools to inspect, recover,
+---or delete swap files safely. The plugin is designed to help users avoid data loss and make
+---informed decisions when encountering swap file conflicts, especially in crash scenarios.
+---
+---User Commands
+---|:SwapDiff|
+---    Buffer-local command that prompts the user for an action when swap files are detected for the current buffer.
+---    Options include recovering and diffing swap files, editing the file normally, or deleting all swap files.
+---
+---|:SwapDiffLog|
+---    Opens a floating window or buffer displaying the SwapDiff log, which contains diagnostic and informational
+---    messages about swap file events and plugin actions. Press `q` to close the log window.
+---@brief ]]
+
 ---@mod swapdiff.types SwapDiff Types
 
----@class SwapDiffPending
----@field filename string
----@field swapfiles SwapDiffSwapInfo[]
+---@alias AutoCmdArgs vim.api.keyset.create_autocmd.callback_args
 
+---Support class for swapdiff.nvim
+---@class SwapDiffBuffer
+---@field relfile string
+---@field absfile string
+---@field swapinfos SwapDiffSwapInfo[]
+
+---Support class for swapdiff.nvim
 ---@class SwapDiffSwapInfo
----@field filepath string
 ---@field swappath string
----@field info table
+---@field info NvimSwapInfo
 
----@mod swapdiff.module SwappDiff Module
+---User configuration for SwapDiff command
+---@class SwapDiffPromptConfig
+---@field style 'None' | 'Notify' | 'Interactive' Action style for SwapDiff prompt
+---@field once boolean? Whether to prompt only once per file
+
+---User configuration for SwapDiff module
+---@class SwapDiffConfig
+---@field prompt_config? SwapDiffPromptConfig Configuration for SwapDiff prompt behavior
+---@field log_level? vim.log.levels Logging level for SwapDiffLog
+---@field notify_level? vim.log.levels Logging level for user notifications
+---@field log_win_config? vim.api.keyset.win_config
+
+---@mod swapdiff.module SwapDiff Module
 
 local M = {}
 
-local api, fn, v = vim.api, vim.fn, vim.v
+local Logger = require('tmi.Logger')
+
+local BufferLogSink = require('tmi.BufferLogSink')
+local NotifyLogSink = require('tmi.NotifyLogSink')
+local PrimaryBufferHandler = require('swapdiff.PrimaryBufferHandler')
 local util = require('swapdiff.util')
+
+local api, fn, v = vim.api, vim.fn, vim.v
+local levels = vim.log.levels
 local abs_path, abs_dir, remove_prefix = util.abs_path, util.abs_dir, util.remove_prefix
 
-local levels = vim.log.levels
-local log = require('swapdiff.log')
-local _log = log.Logger:new('SwapDiff')
-local _buffer_sink = log.BufferLogSink:new()
-_log:add_sink(levels.TRACE, _buffer_sink)
-_log:add_sink(levels.DEBUG, log.NotifyLogSink:new())
+local _log = Logger:empty()
+---@type table<string, PrimaryBufferHandler>
+local _buffer_handlers = {}
 
----@param filename string
+---@param filepath string asbolute filepath
 ---@return SwapDiffSwapInfo[]
-local function get_swapfiles_for_file(filename)
-  local abs_filename = abs_path(filename)
-  local swaps = fn.swapfilelist()
+local function get_swapinfos(filepath)
+  local swapfiles = fn.swapfilelist()
 
   ---@type SwapDiffSwapInfo[]
   local results = {}
   local swap_dir = abs_dir(v.swapname) .. '//' -- get the swap directory from the current swapname
-  for _, swap in ipairs(swaps) do
-    local abs_swap = abs_path(remove_prefix(swap_dir, swap))
-    _log:trace('swap path transformed %s -> %s', swap, abs_swap)
+  for _, swapfile in ipairs(swapfiles) do
+    local abs_swap = abs_path(remove_prefix(swap_dir, swapfile))
+    _log:trace('swap path transformed %s -> %s', swapfile, abs_swap)
 
-    local info = fn.swapinfo(abs_swap)
-    local abs_fname = abs_path(info.fname)
-    if info and abs_fname == abs_filename and info.dirty ~= 0 then
-      table.insert(results, { filepath = abs_fname, info = info, swappath = abs_swap })
+    local info = fn.swapinfo(abs_swap) --[[@as NvimSwapInfo]]
+
+    if info and info.fname then
+      local abs_fname = abs_path(info.fname)
+      if abs_fname == filepath and info.dirty ~= 0 then
+        table.insert(results, { info = info, swappath = abs_swap })
+      end
     end
   end
   return results
@@ -49,8 +92,10 @@ end
 ---Callback for the SwapExists autocmd
 ---@param args AutoCmdArgs
 function M.onSwapExists(args)
+  -- Note: args.buf is always 0 for SwapExists autocmds
+  _log:trace('SwapExists autocmd triggered with args: %s', vim.inspect(args))
   _log:trace_lazy(function()
-    return vim.inspect(vim.api.nvim_get_autocmds({ event = 'SwapExists' }))
+    return vim.inspect(api.nvim_get_autocmds({ event = 'SwapExists' }))
   end)
 
   if v.swapchoice and v.swapchoice ~= '' then
@@ -58,48 +103,92 @@ function M.onSwapExists(args)
     return
   end
 
-  local abs_file = abs_path(args.file)
-  local swapfiles = get_swapfiles_for_file(abs_file)
-
-  if #swapfiles == 0 then
-    _log:trace('No dirty swapfiles found for %s', abs_file)
+  local filename = args.file
+  if not filename or filename == '' then
+    _log:warn('SwapExists triggered with empty filename, skipping SwapDiff')
     return
   end
 
-  _log:debug('Found %i dirty swapfiles for %s', #swapfiles, abs_file)
-
-  local pending = {
-    filename = abs_file,
-    swapfiles = swapfiles,
-  }
-
-  if M.config.auto_prompt then
-    -- Set up BufReadPost autocmd for handling recovery and diff
-    api.nvim_create_autocmd('BufWinEnter', {
-      pattern = abs_file,
-      callback = function(args2)
-        local primary_handler = require('swapdiff.handlers').PrimaryBufferHandler:new(_log, pending)
-        return primary_handler:onBufWinEnter(args2, false)
-      end,
-    })
+  local filepath = args.match or abs_path(filename)
+  if not filepath or filepath == '' then
+    _log:warn('SwapExists triggered with empty filepath, skipping SwapDiff')
+    return
   end
 
-  api.nvim_buf_create_user_command(args.buf, 'SwapDiffRecover', function()
-    local primary_handler = require('swapdiff.handlers').PrimaryBufferHandler:new(_log, pending)
-    ---@diagnostic disable-next-line: missing-fields
-    return primary_handler:onBufWinEnter({ file = abs_file, buf = args.buf }, true)
+  if _buffer_handlers[filepath] then
+    _log:debug("SwapDiff already initialized for file '%s', skipping", filepath)
+    return
+  end
+
+  local swapfiles = get_swapinfos(filepath)
+  if #swapfiles == 0 then
+    _log:trace('No dirty swapfiles found for %s', filepath)
+    return
+  end
+
+  _log:debug('Found %d dirty swapfiles for %s', #swapfiles, filepath)
+
+  ---@type SwapDiffBuffer
+  local pending = {
+    relfile = filename,
+    absfile = filepath,
+    swapinfos = swapfiles,
+  }
+
+  local pbh = PrimaryBufferHandler:new(_log, pending)
+
+  api.nvim_buf_create_user_command(0, 'SwapDiff', function()
+    return pbh:prompt()
   end, {
-    desc = 'Recover and diff all swapfiles for the current file',
+    desc = 'Prompt user for action on swap files',
     force = true,
   })
 
+  api.nvim_create_autocmd('BufDelete', {
+    buffer = 0,
+    once = true,
+    callback = function()
+      _log:trace('BufDelete for %s, cleaning up swapdiff state', filepath)
+      _buffer_handlers[filepath] = nil
+    end,
+  })
+
+  local prompt_config = M.config.prompt_config
+  if prompt_config then
+    if prompt_config.style == 'Interactive' then
+      api.nvim_create_autocmd('BufWinEnter', {
+        pattern = filepath,
+        callback = function(args2)
+          return pbh:onBufWinEnter(args2, not prompt_config.once)
+        end,
+      })
+    end
+  end
+
+  _buffer_handlers[filepath] = pbh
   v.swapchoice = 'e' -- Open the file normally
 end
 
----@class SwapDiffConfig
----@field auto_prompt boolean? Automatically prompt for recovery when swap files are detected
+---@type SwapDiffConfig
 M.defaults = {
-  auto_prompt = true,
+  prompt_config = {
+    style = 'Interactive',
+    once = false,
+  },
+  log_level = levels.DEBUG,
+  notify_level = levels.INFO,
+  log_win_config = {
+    relative = 'editor',
+    width = math.floor(vim.o.columns * 0.8),
+    height = math.floor(vim.o.lines * 0.8),
+    row = math.floor((vim.o.lines - vim.o.lines * 0.8) / 2),
+    col = math.floor((vim.o.columns - vim.o.columns * 0.8) / 2),
+    style = 'minimal',
+    border = 'rounded',
+    title = 'SwapDiff Log',
+    footer = '<q> to close',
+    footer_pos = 'right',
+  },
 }
 
 ---Initialize the SwapDiff module with options
@@ -108,13 +197,27 @@ function M.setup(opts)
   print('SwapDiff Handler: Setting up with options:', vim.inspect(opts))
   M.config = vim.tbl_deep_extend('force', M.defaults, opts or {})
 
+  _log = Logger:new('SwapDiff')
+  _log:add_sink(M.config.notify_level, NotifyLogSink:new())
+
+  local _buffer_sink = BufferLogSink:new()
+  _log:add_sink(M.config.log_level, _buffer_sink)
+
   api.nvim_create_user_command('SwapDiffLog', function()
-    if not _buffer_sink then
+    if not _buffer_sink or not _buffer_sink.bufnr then
       _log:critical('SwapDiff buffer sink is not initialized, cannot show log')
       return
     end
-    api.nvim_buf_set_keymap(_buffer_sink.buffer, 'n', 'q', '<cmd>q<CR>', { noremap = true, silent = true })
-    _buffer_sink:open(true)
+
+    local bufnr = _buffer_sink.bufnr
+    api.nvim_buf_set_keymap(bufnr, 'n', 'q', '<cmd>q<CR>', { noremap = true, silent = true })
+
+    local win_config = M.config.log_win_config
+    if win_config then
+      vim.api.nvim_open_win(bufnr, true, win_config)
+    else
+      vim.api.nvim_set_current_buf(bufnr)
+    end
   end, {
     desc = 'Show the SwapDiff log',
     force = true,

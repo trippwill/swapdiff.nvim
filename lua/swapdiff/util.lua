@@ -46,4 +46,21 @@ function M.remove_prefix(prefix, str)
   end
 end
 
+---Validate pending SwapDiffBuffer state
+---@private
+---@param pending SwapDiffBuffer
+---@param absfile string
+---@return string relfile
+---@return string absfile
+---@return SwapDiffSwapInfo[] swapinfos
+function M.assert_pending(pending, absfile)
+  local _pending = assert(pending, 'SwapDiff pending state should not be nil')
+  local _absfile = assert(_pending.absfile, 'SwapDiff pending state should have a filename')
+  assert(_absfile == absfile, 'SwapDiff pending state filename should match the opened file')
+  local relfile = assert(_pending.relfile, 'SwapDiff pending state should have a relative filename')
+  local swapinfos = assert(_pending.swapinfos, 'SwapDiff pending state should have swapfiles')
+  assert(#swapinfos > 0, 'SwapDiff pending state should have non-empty swapfiles')
+  return relfile, _absfile, swapinfos
+end
+
 return M

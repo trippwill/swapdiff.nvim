@@ -1,4 +1,4 @@
-local log = require('swapdiff.log')
+local Logger = require('tmi.Logger')
 
 ---@module 'plenary.test_harness'
 ---@diagnostic disable: unused-local
@@ -19,7 +19,7 @@ describe('Logger', function()
   before_each(function()
     sink_info = make_sink()
     sink_warn = make_sink()
-    logger = log.Logger:new('TestLogger')
+    logger = Logger:new('TestLogger')
     logger:add_sink(vim.log.levels.INFO, sink_info)
     logger:add_sink(vim.log.levels.WARN, sink_warn)
     logger:enable(true)
@@ -79,5 +79,17 @@ describe('Logger', function()
     ---@diagnostic disable-next-line: need-check-nil
     assert.is_true(err:match('CRITICAL') ~= nil)
     assert.are.equal('lazy fail', sink_info.messages[#sink_info.messages].msg)
+  end)
+
+  it('empty logger swallows all method calls', function()
+    local empty = Logger:empty()
+    -- Should not error or do anything
+    empty:info('should not log')
+    empty:warn('should not log')
+    empty:critical('should not error')
+    empty:enable(false)
+    -- Even unknown methods
+    ---@diagnostic disable-next-line: undefined-field
+    empty:some_unknown_method()
   end)
 end)

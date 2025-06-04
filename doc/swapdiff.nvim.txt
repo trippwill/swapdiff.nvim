@@ -1,23 +1,70 @@
 ==============================================================================
+SwapDiff Introduction                                           *swapdiff.intro*
+
+                                                                     *:SwapDiff*
+                                                                  *:SwapDiffLog*
+SwapDiff is a Neovim plugin providing advanced swap file management and recovery features.
+It enhances the default swap file conflict prompt by allowing users to interactively review,
+diff, and recover changes from swap files. SwapDiff integrates with Neovim's event system to
+detect swap file conflicts, provides user-friendly prompts, and offers tools to inspect, recover,
+or delete swap files safely. The plugin is designed to help users avoid data loss and make
+informed decisions when encountering swap file conflicts, especially in crash scenarios.
+
+User Commands
+|:SwapDiff|
+    Buffer-local command that prompts the user for an action when swap files are detected for the current buffer.
+    Options include recovering and diffing swap files, editing the file normally, or deleting all swap files.
+
+|:SwapDiffLog|
+    Opens a floating window or buffer displaying the SwapDiff log, which contains diagnostic and informational
+    messages about swap file events and plugin actions. Press `q` to close the log window.
+
+==============================================================================
 SwapDiff Types                                                  *swapdiff.types*
 
-SwapDiffPending                                *swapdiff.module.SwapDiffPending*
+AutoCmdArgs                                        *swapdiff.module.AutoCmdArgs*
+
+    Type: ~
+        vim.api.keyset.create_autocmd.callback_args
+
+
+SwapDiffBuffer                                  *swapdiff.module.SwapDiffBuffer*
+    Support class for swapdiff.nvim
 
     Fields: ~
-        {filename}   (string)
-        {swapfiles}  (SwapDiffSwapInfo[])
+        {relfile}    (string)
+        {absfile}    (string)
+        {swapinfos}  (SwapDiffSwapInfo[])
 
 
 SwapDiffSwapInfo                              *swapdiff.module.SwapDiffSwapInfo*
+    Support class for swapdiff.nvim
 
     Fields: ~
-        {filepath}  (string)
         {swappath}  (string)
-        {info}      (table)
+        {info}      (NvimSwapInfo)
+
+
+SwapDiffPromptConfig                      *swapdiff.module.SwapDiffPromptConfig*
+    User configuration for SwapDiff command
+
+    Fields: ~
+        {style}  ("None"|"Notify"|"Interactive")  Action style for SwapDiff prompt
+        {once}   (boolean)
+
+
+SwapDiffConfig                                  *swapdiff.module.SwapDiffConfig*
+    User configuration for SwapDiff module
+
+    Fields: ~
+        {prompt_config?}   (SwapDiffPromptConfig)       Configuration for SwapDiff prompt behavior
+        {log_level?}       (vim.log.levels)             Logging level for SwapDiffLog
+        {notify_level?}    (vim.log.levels)             Logging level for user notifications
+        {log_win_config?}  (vim.api.keyset.win_config)
 
 
 ==============================================================================
-SwappDiff Module                                               *swapdiff.module*
+SwapDiff Module                                                *swapdiff.module*
 
 M.onSwapExists({args})                            *swapdiff.module.onSwapExists*
     Callback for the SwapExists autocmd
@@ -26,10 +73,10 @@ M.onSwapExists({args})                            *swapdiff.module.onSwapExists*
         {args}  (AutoCmdArgs)
 
 
-SwapDiffConfig                                  *swapdiff.module.SwapDiffConfig*
+M.defaults                                            *swapdiff.module.defaults*
 
-    Fields: ~
-        {auto_prompt}  (boolean)
+    Type: ~
+        (SwapDiffConfig)
 
 
 M.setup({opts})                                          *swapdiff.module.setup*
@@ -40,15 +87,84 @@ M.setup({opts})                                          *swapdiff.module.setup*
 
 
 ==============================================================================
-SwapDiff Bufferline Integration                      *swapdiff.bufferline.intro*
+Auxiliary Types for SwapDiff                                 *swapdiff.auxtypes*
+
+NvimSwapInfo                                    *swapdiff.auxtypes.NvimSwapInfo*
+
+    Fields: ~
+        {version}  (string)   Vim version
+        {user}     (string)   User name
+        {host}     (string)   Host name
+        {fname}    (string)   Original file name
+        {pid}      (integer)  PID of the instance that created the swap file, or zero if not running
+        {mtime}    (integer)  Last modification time in seconds
+        {inode?}   (integer)  INODE number of the original file
+        {dirty}    (integer)  1 if file was was modified, 0 if not
+        {error?}   (string)   Error message if any, otherwise nil
+
+
+==============================================================================
+PrimaryBufferHandler Module                      *swapdiff.primarybufferhandler*
+
+Support module for handling buffer events in SwapDiff.
+
+                            *swapdiff.primarybufferhandler.PrimaryBufferHandler*
+PrimaryBufferHandler
+
+    Fields: ~
+
+
+
+                                             *swapdiff.primarybufferhandler:new*
+PrimaryBufferHandler:new({log}, {pending})
+    Create a new PrimaryBufferHandler instance
+
+    Parameters: ~
+        {log}      (Logger)
+        {pending}  (SwapDiffBuffer)
+
+    Returns: ~
+        (PrimaryBufferHandler)
+
+
+                                   *swapdiff.primarybufferhandler:onBufWinEnter*
+PrimaryBufferHandler:onBufWinEnter()
+
+
+PrimaryBufferHandler:prompt()             *swapdiff.primarybufferhandler:prompt*
+
+
+==============================================================================
+RecoveryTabHandler Module                          *swapdiff.recoverytabhandler*
+
+Support module for managing recovery tabs in SwapDiff.
+
+                                *swapdiff.recoverytabhandler.RecoveryTabHandler*
+RecoveryTabHandler
+
+    Fields: ~
+        {_log}      (Logger)
+        {_pending}  (SwapDiffBuffer)
+
+
+RecoveryTabHandler:new()                       *swapdiff.recoverytabhandler:new*
+
+
+                                    *swapdiff.recoverytabhandler:start_recovery*
+RecoveryTabHandler:start_recovery({fpath})
+    @async
+
+    Parameters: ~
+        {fpath}  (string)  expected absolute file path to recover
+
+
+==============================================================================
+SwapDiff Bufferline Integration                            *swapdiff.bufferline*
 
 Provides a function to replace the default bufferline.nvim go_to function,
 which ensures that SwapExists is triggered if necessary.
 
-==============================================================================
-SwapDiff Bufferline Module                          *swapdiff.bufferline.module*
-
-M.go_to()                                     *swapdiff.bufferline.module.go_to*
+M.go_to()                                            *swapdiff.bufferline.go_to*
 
 
 ==============================================================================
@@ -96,108 +212,362 @@ M.remove_prefix({prefix}, {str})                   *swapdiff.util.remove_prefix*
 
 
 ==============================================================================
-Introduction                                                         *log.intro*
-
-USAGE EXAMPLES
-
->
-    local log = require('swapdiff.log')
-
-    -- Create a logger with a title
-    local logger = log.Logger:new('MyPlugin')
-
-    -- Add a file sink for INFO and above
-    logger:add_sink(vim.log.levels.INFO, log.FileLogSink:new('/tmp/myplugin.log'))
-
-    -- Add a Vim message sink for WARN and above
-    logger:add_sink(vim.log.levels.WARN, log.VimLogSink:new())
-
-    -- Simple logging
-    logger:info('Plugin loaded: %s', 'MyPlugin')
-    logger:warn('Something might be wrong: %s', 'details')
-
-    -- Lazy logging (expensive computation only if needed)
-    logger:debug_lazy(function()
-     return string.format('Debug info: %s', vim.inspect({foo = 'bar'}))
-    end)
-
-    -- Critical logging (logs and raises error)
-    logger:critical('Fatal error: %s', 'something bad')
-    -- or lazy:
-    logger:critical_lazy(function() return 'Fatal error: ' .. tostring(something) end)
-
-    -- Enable/disable logging
-    logger:enable(false) -- disables all logging
-    logger:enable(true)  -- enables logging
-<
-
-==============================================================================
-Types                                                                *log.types*
-
-Signature for log methods.
-fun(self: LogSink, level: vim.log.levels, fmt: string, ...: any?)
-
-LogMethod                                                 *log.module.LogMethod*
-
-    Type: ~
-        fun
-
+LogSink Interface                                                  *tmi.logsink*
 
 Interface for log sinks.
 Override log method to customize logging behavior.
 
-LogSink                                                     *log.module.LogSink*
+LogSink                                                    *tmi.logsink.LogSink*
 
     Fields: ~
         {title}  (string)
-        {log}    (LogMethod)  Log a message at the specified level.
+
+
+LogSink:log({level}, {fmt}, {...})                             *tmi.logsink:log*
+    Log a message at the specified level.
+
+    Parameters: ~
+        {level}  (vim.log.levels)  The log level for the message.
+        {fmt}    (string)          The format string for the message.
+        {...}    (any)             The values to format into the string.
+                                   @diagnostic disable-next-line: unused-vararg, unused-local
 
 
 ==============================================================================
-Sinks                                                                *log.sinks*
+Logger Class                                                        *tmi.logger*
 
-FileLogSink : LogSink                                   *log.module.FileLogSink*
+Manages logging with multiple sinks, allowing for different log levels and formats.
 
-    Fields: ~
-        {file_path}  (string)  The path to the log file.
+>
+   local Logger = require('tmi.Logger')
+   local log = Logger:new('MyLogger')
+   log:add_sink(vim.log.levels.INFO, require('tmi.BufferLogSink'):new())
+   log:add_sink(vim.log.levels.ERROR, require('tmi.NotifyLogSink'):new())
 
+   log:info('This is an info message')
+   log:debug('This is a debug message with a value: %s', some_value)
+   log:critical('This will terminate the current function with an error: %s', error_message)
 
-VimLogSink : LogSink                                     *log.module.VimLogSink*
+   -- Disable the logger
+   log:enable(false)
+   -- Re-enable the logger
+   log:enable(true)
 
-    Fields: ~
-        {prefix}  (string)  The prefix for the log messages.
+   -- Create an empty logger that does nothing
+   local noop_logger = Logger:empty()
+<
 
-
-NotifyLogSink : LogSink                               *log.module.NotifyLogSink*
-
-
-BufferLogSink : LogSink                               *log.module.BufferLogSink*
-
-    Fields: ~
-        {buffer}  (number)  The buffer number for the log messages.
-
-
-==============================================================================
-Logger                                                              *log.logger*
-
-Logger                                                       *log.module.Logger*
+Logger : LogSink                                             *tmi.logger.Logger*
 
     Fields: ~
         {title}  (string)  The title for the logger, used in log messages.
         {sinks}  (table)
 
 
-==============================================================================
-Log Module                                                          *log.module*
+Logger:new({title})                                             *tmi.logger:new*
+    Create a new Logger instance.
 
-LogModule                                                 *log.module.LogModule*
+    Parameters: ~
+        {title}  (string)  The title for the logger, used in log messages.
+
+    Returns: ~
+        (Logger)
+
+
+Logger:empty()                                                *tmi.logger:empty*
+    Create an empty logger that does nothing.
+
+    Returns: ~
+        (Logger)
+
+
+Logger:enable({enable})                                      *tmi.logger:enable*
+    Enable or disable the logger.
+
+    Parameters: ~
+        {enable}  (boolean)  If true, enable the logger; if false, disable it.
+
+
+Logger:add_sink({level}, {sink})                           *tmi.logger:add_sink*
+    Add a log sink with a minimum log level.
+    The title for the sink will default to the logger's title if not already set.
+
+    Parameters: ~
+        {level}  (vim.log.levels)  The minimum log level for the sink.
+        {sink}   (LogSink)         The log sink to add.
+
+
+Logger:log()                                                    *tmi.logger:log*
+    Log a message at the specified level.
+
+
+Logger:log_lazy({level}, {fn}, {...})                      *tmi.logger:log_lazy*
+    Log a message at the specified level using a lazy evaluation function.
+
+    Parameters: ~
+        {level}  (vim.log.levels)  The log level for the message.
+        {fn}     (function)        A function that returns the message to log.
+        {...}    (any)             The values to pass to the function.
+
+    Returns: ~
+        (string|nil)  The message that was logged, or nil if no sinks were enabled for the level.
+
+
+Logger:trace({fmt}, {...})                                    *tmi.logger:trace*
+    Log a message at the TRACE level.
+
+    Parameters: ~
+        {fmt}  (string)  The format string for the message.
+        {...}  (any)     The values to format into the string.
+
+
+Logger:trace_lazy({fn}, {...})                           *tmi.logger:trace_lazy*
+    Log a message at the TRACE level using a lazy evaluation function.
+
+    Parameters: ~
+        {fn}   (function)  A function that returns the message to log.
+        {...}  (any)       The values to pass to the function.
+
+    Returns: ~
+        (string|nil)  The message that was logged, or nil if no sinks were enabled for the level.
+
+
+Logger:debug({fmt}, {...})                                    *tmi.logger:debug*
+    Log a message at the DEBUG level.
+
+    Parameters: ~
+        {fmt}  (string)  The format string for the message.
+        {...}  (any)     The values to format into the string.
+
+
+Logger:debug_lazy({fn}, {...})                           *tmi.logger:debug_lazy*
+    Log a message at the DEBUG level using a lazy evaluation function.
+
+    Parameters: ~
+        {fn}   (function)  A function that returns the message to log.
+        {...}  (any)       The values to pass to the function.
+
+    Returns: ~
+        (string|nil)  The message that was logged, or nil if no sinks were enabled for the level.
+
+
+Logger:info({fmt}, {...})                                      *tmi.logger:info*
+    Log a message at the INFO level.
+
+    Parameters: ~
+        {fmt}  (string)  The format string for the message.
+        {...}  (any)     The values to format into the string.
+
+
+Logger:info_lazy({fn}, {...})                             *tmi.logger:info_lazy*
+    Log a message at the INFO level using a lazy evaluation function.
+
+    Parameters: ~
+        {fn}   (function)  A function that returns the message to log.
+        {...}  (any)       The values to pass to the function.
+
+    Returns: ~
+        (string|nil)  The message that was logged, or nil if no sinks were enabled for the level.
+
+
+Logger:warn({fmt}, {...})                                      *tmi.logger:warn*
+    Log a message at the WARN level.
+
+    Parameters: ~
+        {fmt}  (string)  The format string for the message.
+        {...}  (any)     The values to format into the string.
+
+
+Logger:warn_lazy({fn}, {...})                             *tmi.logger:warn_lazy*
+    Log a message at the WARN level using a lazy evaluation function.
+
+    Parameters: ~
+        {fn}   (function)  A function that returns the message to log.
+        {...}  (any)       The values to pass to the function.
+
+    Returns: ~
+        (string|nil)  The message that was logged, or nil if no sinks were enabled for the level.
+
+
+Logger:error({fmt}, {...})                                    *tmi.logger:error*
+    Log a message at the ERROR level.
+
+    Parameters: ~
+        {fmt}  (string)  The format string for the message.
+        {...}  (any)     The values to format into the string.
+
+
+Logger:error_lazy({fn}, {...})                           *tmi.logger:error_lazy*
+    Log a message at the ERROR level using a lazy evaluation function.
+
+    Parameters: ~
+        {fn}   (function)  A function that returns the message to log.
+        {...}  (any)       The values to pass to the function.
+
+    Returns: ~
+        (string|nil)  The message that was logged, or nil if no sinks were enabled for the level.
+
+
+Logger:critical({fmt}, {...})                              *tmi.logger:critical*
+    Log a message at the ERROR level.
+    Terminates the function with an error.
+
+    Parameters: ~
+        {fmt}  (string)  The format string for the message.
+        {...}  (any)     The values to format into the string.
+
+
+Logger:critical_lazy({fn}, {...})                     *tmi.logger:critical_lazy*
+    Log a message at the ERROR level using a lazy evaluation function.
+    Terminates the function with an error.
+
+    Parameters: ~
+        {fn}   (function)  A function that returns the message to log.
+        {...}  (any)       The values to pass to the function.
+
+
+==============================================================================
+PrintLogSink Introduction                               *tmi.printlogsink.intro*
+
+ PrintLogSink provides a log sink that writes log messages to the Neovim message area using `print()`.
+
+ This class is used by the tmi logging framework to display log output directly in the Neovim command area.
+
+ Each PrintLogSink instance can be given a title, and log messages are formatted with log levels.
+
+ Usage:
+   local PrintLogSink = require('tmi.PrintLogSink')
+   local sink = PrintLogSink:new()
+   sink:log(vim.log.levels.INFO, "Hello, print log!")
+
+ Typically, you do not need to call log directly on this class. Instead, register
+ an instance with |tmi.logger:add_sink| to capture log messages.
+
+==============================================================================
+PrintLogSink Class                                            *tmi.printlogsink*
+
+PrintLogSink : LogSink                           *tmi.printlogsink.PrintLogSink*
+
+
+PrintLogSink:new()                                        *tmi.printlogsink:new*
+    Create a new PrintLogSink instance.
+
+    Returns: ~
+        (PrintLogSink)
+
+
+PrintLogSink:log()                                        *tmi.printlogsink:log*
+
+
+==============================================================================
+FileLogSink Introduction                                 *tmi.filelogsink.intro*
+
+ FileLogSink provides a log sink that writes log messages to a file on disk.
+
+ This class is used by the tmi logging framework to persist log output for later inspection.
+
+ Each FileLogSink instance manages its own log file, and log messages are formatted with timestamps and log levels.
+
+ Usage:
+   local FileLogSink = require('tmi.FileLogSink')
+   local sink = FileLogSink:new('/tmp/mylog.txt')
+   sink:log(vim.log.levels.INFO, "Hello, file log!")
+
+ Typically, you do not need to call log directly on this class. Instead, register
+ an instance with |tmi.logger:add_sink| to capture log messages.
+
+==============================================================================
+FileLogSink Class                                              *tmi.filelogsink*
+
+FileLogSink : LogSink                              *tmi.filelogsink.FileLogSink*
 
     Fields: ~
-        {Logger}         (Logger)         Logger with convenience methods for logging to LogSinks.
-        {FileLogSink}    (FileLogSink)    File sink for logging to a file.
-        {VimLogSink}     (VimLogSink)     Vim message sink for logging to Vim's message area.
-        {NotifyLogSink}  (NotifyLogSink)  Notify sink for logging using Vim's notify function.
-        {BufferLogSink}  (BufferLogSink)  Buffer sink for logging to a scratch buffer.
+        {file_path}  (string)  The path to the log file.
+
+
+FileLogSink:new({file_path})                               *tmi.filelogsink:new*
+    Create a new FileLogSink instance.
+
+    Parameters: ~
+        {file_path}  (string)  The path to the log file.
+
+    Returns: ~
+        (FileLogSink)
+
+
+FileLogSink:log()                                          *tmi.filelogsink:log*
+    Log a message to the file at the specified log level.
+
+
+==============================================================================
+NotifyLogSink Introduction                             *tmi.notifylogsink.intro*
+
+ NotifyLogSink provides a log sink that writes log messages using `vim.notify()`.
+
+ This class is used by the tmi logging framework to display log output as Neovim notifications.
+
+ Each NotifyLogSink instance can be given a title, and log messages are formatted with log levels.
+
+ Usage:
+   local NotifyLogSink = require('tmi.NotifyLogSink')
+   local sink = NotifyLogSink:new()
+   sink:log(vim.log.levels.INFO, "Hello, notify log!")
+
+ Typically, you do not need to call log directly on this class. Instead, register
+ an instance with |tmi.logger:add_sink| to capture log messages.
+
+==============================================================================
+NotifyLogSink Class                                          *tmi.notifylogsink*
+
+NotifyLogSink : LogSink                        *tmi.notifylogsink.NotifyLogSink*
+
+
+NotifyLogSink:new()                                      *tmi.notifylogsink:new*
+    Create a new NotifyLogSink instance.
+
+    Returns: ~
+        (NotifyLogSink)
+
+
+NotifyLogSink:log()                                      *tmi.notifylogsink:log*
+
+
+==============================================================================
+BufferLogSink Introduction                             *tmi.bufferlogsink.intro*
+
+ BufferLogSink provides a log sink that writes log messages to a dedicated Neovim buffer.
+
+ This class is used by the tmi logging framework to capture and display log output
+ in a scratch buffer, making it easy to inspect logs interactively within Neovim.
+
+ Each BufferLogSink instance manages its own buffer, which can be opened in a window for
+ real-time log viewing. Log messages are formatted with timestamps and log levels.
+
+ Usage:
+   local BufferLogSink = require('tmi.BufferLogSink')
+   local sink = BufferLogSink:new()
+   sink:log(vim.log.levels.INFO, "Hello, buffer log!")
+
+ Typically, you do not need to call log directly on this class. Instead, register
+ an instance with |tmi.logger:add_sink| to capture log messages.
+
+==============================================================================
+BufferLogSink Class                                          *tmi.bufferlogsink*
+
+BufferLogSink : LogSink                        *tmi.bufferlogsink.BufferLogSink*
+
+    Fields: ~
+        {bufnr}  (number)  The buffer number for the log messages.
+
+
+BufferLogSink:new()                                      *tmi.bufferlogsink:new*
+    Create a new BufferLogSink instance.
+
+    Returns: ~
+        (BufferLogSink)
+
+
+BufferLogSink:log()                                      *tmi.bufferlogsink:log*
 
 
 vim:tw=78:ts=8:noet:ft=help:norl:
