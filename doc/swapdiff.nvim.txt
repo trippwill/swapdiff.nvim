@@ -128,10 +128,25 @@ PrimaryBufferHandler:new({log}, {pending})
 
 
                                    *swapdiff.primarybufferhandler:onBufWinEnter*
-PrimaryBufferHandler:onBufWinEnter()
+PrimaryBufferHandler:onBufWinEnter({args}, {config})
+    Handle the BufWinEnter event
+
+    Parameters: ~
+        {args}    (AutoCmdArgs)
+        {config}  (SwapDiffPromptConfig)
+
+
+                                          *swapdiff.primarybufferhandler:notify*
+PrimaryBufferHandler:notify({args}, {config})
+    Notify the user about dirty swap files for the buffer.
+
+    Parameters: ~
+        {args}    (AutoCmdArgs)
+        {config}  (SwapDiffPromptConfig)
 
 
 PrimaryBufferHandler:prompt()             *swapdiff.primarybufferhandler:prompt*
+    Prompt the user to recover or handle swap files for the buffer.
 
 
 ==============================================================================
@@ -147,11 +162,19 @@ RecoveryTabHandler
         {_pending}  (SwapDiffBuffer)
 
 
-RecoveryTabHandler:new()                       *swapdiff.recoverytabhandler:new*
+                                               *swapdiff.recoverytabhandler:new*
+RecoveryTabHandler:new({log}, {pending}, {ontabclose?})
+    Create a new RecoveryTabHandler instance
+
+    Parameters: ~
+        {log}          (Logger)
+        {pending}      (SwapDiffBuffer)
+        {ontabclose?}  (fun(tab:integer))
 
 
                                     *swapdiff.recoverytabhandler:start_recovery*
 RecoveryTabHandler:start_recovery({fpath})
+    Start the recovery process in a new tab
     @async
 
     Parameters: ~
@@ -429,7 +452,7 @@ Logger:critical_lazy({fn}, {...})                     *tmi.logger:critical_lazy*
 ==============================================================================
 PrintLogSink Introduction                               *tmi.printlogsink.intro*
 
- PrintLogSink provides a log sink that writes log messages to the Neovim message area using `print()`.
+ PrintLogSink writes log messages to the Neovim message area using `print()`.
 
  This class is used by the tmi logging framework to display log output directly in the Neovim command area.
 
@@ -462,7 +485,7 @@ PrintLogSink:log()                                        *tmi.printlogsink:log*
 ==============================================================================
 FileLogSink Introduction                                 *tmi.filelogsink.intro*
 
- FileLogSink provides a log sink that writes log messages to a file on disk.
+ FileLogSink writes log messages to a file on disk.
 
  This class is used by the tmi logging framework to persist log output for later inspection.
 
@@ -502,7 +525,7 @@ FileLogSink:log()                                          *tmi.filelogsink:log*
 ==============================================================================
 NotifyLogSink Introduction                             *tmi.notifylogsink.intro*
 
- NotifyLogSink provides a log sink that writes log messages using `vim.notify()`.
+ NotifyLogSink writes log messages using `vim.notify()`.
 
  This class is used by the tmi logging framework to display log output as Neovim notifications.
 
@@ -535,7 +558,7 @@ NotifyLogSink:log()                                      *tmi.notifylogsink:log*
 ==============================================================================
 BufferLogSink Introduction                             *tmi.bufferlogsink.intro*
 
- BufferLogSink provides a log sink that writes log messages to a dedicated Neovim buffer.
+ BufferLogSink writes log messages to a dedicated Neovim buffer.
 
  This class is used by the tmi logging framework to capture and display log output
  in a scratch buffer, making it easy to inspect logs interactively within Neovim.

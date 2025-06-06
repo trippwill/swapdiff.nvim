@@ -86,4 +86,20 @@ function M.open_menu_window(options, config)
   }
 end
 
+--- Opens a selection menu with a prompt and a list of items.
+---@async
+---@param prompt string
+---@param items string[] A table of menu items.
+---@param onselect fun(item: string | nil, idx: number | nil) Called when the user makes a selection.
+function M.open_select(prompt, items, onselect)
+  local opts = {
+    prompt = prompt,
+  }
+  vim.ui.select(items, opts, function(_item, _idx)
+    if type(onselect) == 'function' then
+      onselect(_item, _idx)
+    end
+  end)
+end
+
 return M

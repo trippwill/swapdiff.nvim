@@ -7,6 +7,7 @@
 ---@field private _augroup integer
 ---@field _log Logger
 ---@field _pending SwapDiffBuffer?
+---@field _ontabclose? fun(tab: integer)
 local RecoveryTabHandler = {}
 
 local api, fn = vim.api, vim.fn
@@ -14,11 +15,16 @@ local open_menu_window = require('swapdiff.ui').open_menu_window
 local util = require('swapdiff.util')
 local tail_path, assert_pending = util.tail_path, util.assert_pending
 
-function RecoveryTabHandler:new(log, pending)
+---Create a new RecoveryTabHandler instance
+---@param log Logger
+---@param pending SwapDiffBuffer
+---@param ontabclose? fun(tab: integer)
+function RecoveryTabHandler:new(log, pending, ontabclose)
   local obj = setmetatable({}, { __index = self })
   obj._augroup = api.nvim_create_augroup('SwapDiffRecovery', { clear = false })
   obj._log = log or require('tmi.Logger'):empty()
   obj._pending = pending
+  obj._ontabclose = ontabclose
   return obj
 end
 
@@ -93,6 +99,7 @@ function RecoveryTabHandler:recover_swapfile(swapfile)
   end)
 end
 
+---Start the recovery process in a new tab
 ---@async
 ---@param fpath string expected absolute file path to recover
 function RecoveryTabHandler:start_recovery(fpath)
@@ -102,7 +109,25 @@ function RecoveryTabHandler:start_recovery(fpath)
   vim.wo[0].winbar = 'CURRENT: ' .. tail_path(filename)
   _log:info('Recovering %d swapfiles for %s', #swapfiles, filename)
 
-  local main_win = vim.api.nvim_get_current_win()
+  -- Set up autocmd to handle tab close event
+  if type(self._ontabclose) == 'function' then
+    local tabpage = api.nvim_get_current_tabpage()
+    api.nvim_create_autocmd('TabClosed', {
+      group = self._augroup,
+      callback = function(args)
+        -- TODO: Figure out why this isn't working
+        if args.file == tabpage then
+          _log:trace('Tab closed, calling ontabclose callback')
+          self._ontabclose(tabpage)
+          return true -- delete the autocmd
+        end
+      end,
+    })
+  end
+
+  local main_win = api.nvim_get_current_win()
+  self._log:trace('Main window for recovery: %d', main_win)
+
   vim.cmd('wincmd t')
   open_menu_window({
     {
@@ -135,7 +160,7 @@ function RecoveryTabHandler:start_recovery(fpath)
     end,
   })
 
-  vim.api.nvim_set_current_win(main_win)
+  api.nvim_set_current_win(main_win)
 
   -- Process all swapfiles sequentially
   coroutine.wrap(function()

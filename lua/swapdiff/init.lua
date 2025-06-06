@@ -128,13 +128,18 @@ function M.onSwapExists(args)
 
   _log:debug('Found %d dirty swapfiles for %s', #swapfiles, filepath)
 
+  local prompt_config = M.config.prompt_config
+  if not prompt_config then
+    _log:critical('SwapDiff prompt_config is not set, cannot proceed with SwapDiff')
+    return
+  end
+
   ---@type SwapDiffBuffer
   local pending = {
     relfile = filename,
     absfile = filepath,
     swapinfos = swapfiles,
   }
-
   local pbh = PrimaryBufferHandler:new(_log, pending)
 
   api.nvim_buf_create_user_command(0, 'SwapDiff', function()
@@ -153,16 +158,13 @@ function M.onSwapExists(args)
     end,
   })
 
-  local prompt_config = M.config.prompt_config
   if prompt_config then
-    if prompt_config.style == 'Interactive' then
-      api.nvim_create_autocmd('BufWinEnter', {
-        pattern = filepath,
-        callback = function(args2)
-          return pbh:onBufWinEnter(args2, not prompt_config.once)
-        end,
-      })
-    end
+    api.nvim_create_autocmd('BufWinEnter', {
+      pattern = filepath,
+      callback = function(args2)
+        return pbh:onBufWinEnter(args2, prompt_config)
+      end,
+    })
   end
 
   _buffer_handlers[filepath] = pbh
