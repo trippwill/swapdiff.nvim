@@ -31,7 +31,7 @@ jobs:
           uses: actions/cache@v3
           with:
             path: $HOME/.local/share/nvim/site/pack/test/start/plenary.nvim
-            key: ${{ runner.os }}-plenary-${{ hashFiles('**/plenary.nvim') }}
+            key: ${{ runner.os }}-plenary-${{ hashFiles('$HOME/.local/share/nvim/site/pack/test/start/plenary.nvim/README.md') }}
         - name: Install dependencies
           run: |
             if [ ! -d "$HOME/.local/share/nvim/site/pack/test/start/plenary.nvim" ]; then
