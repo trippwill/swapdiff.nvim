@@ -65,7 +65,7 @@ local _log = Logger:empty()
 ---@type table<string, PrimaryBufferHandler>
 local _buffer_handlers = {}
 
----@param filepath string asbolute filepath
+---@param filepath string absolute filepath
 ---@return SwapDiffSwapInfo[]
 local function get_swapinfos(filepath)
   local swapfiles = fn.swapfilelist()
