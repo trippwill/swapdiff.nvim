@@ -12,7 +12,7 @@ SwapDiff.nvim is a Neovim plugin that enhances swapfile conflict handling by pro
 
 ## Installation
 
-**Requirements:** Neovim 0.9+
+**Requirements:** Neovim 0.11+
 
 Install with [lazy.nvim](https://github.com/folke/lazy.nvim):
 
@@ -136,7 +136,7 @@ SwapDiff hooks into Neovim's `SwapExists` event. When you open a file with an ex
 ## Development
 
 - **Generating Documentation:**  
-  Run `sh doc.sh doc/swapdiff.txt doclist` to generate Vim help docs using [vimcats](https://github.com/triptychlabs/vimcats).
+  Run `sh doc.sh doc/swapdiff.nvim.txt doclist` to generate Vim help docs using [vimcats](https://github.com/triptychlabs/vimcats).
 
 - **File Structure:**
   - `lua/swapdiff/` – Core plugin code
