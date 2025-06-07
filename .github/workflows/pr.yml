@@ -9,7 +9,7 @@ jobs:
       runs-on: ubuntu-latest
       steps:
         - uses: actions/checkout@v3
-        - uses: rhysd/action-setup-vim@v1.2.3
+        - uses: rhysd/action-setup-vim
           with:
             neovim: true
             version: nightly
