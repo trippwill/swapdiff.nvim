@@ -50,3 +50,28 @@ describe('util.remove_prefix', function()
     assert.are.equal(util.remove_prefix('baz', 'barbaz'), 'barbaz')
   end)
 end)
+
+describe('util.assert_pending', function()
+  it('returns pending values when input matches', function()
+    local pending = {
+      relfile = 'foo.txt',
+      absfile = '/abs/foo.txt',
+      swapinfos = { { swappath = '/tmp/foo.swp', info = {} } },
+    }
+    local rel, abs, infos = util.assert_pending(pending, '/abs/foo.txt')
+    assert.are.equal('foo.txt', rel)
+    assert.are.equal('/abs/foo.txt', abs)
+    assert.are.equal(pending.swapinfos, infos)
+  end)
+
+  it('errors when absfile mismatches', function()
+    local pending = {
+      relfile = 'foo.txt',
+      absfile = '/abs/foo.txt',
+      swapinfos = { { swappath = '/tmp/foo.swp', info = {} } },
+    }
+    local ok, err = pcall(util.assert_pending, pending, '/abs/other.txt')
+    assert.is_false(ok)
+    assert.is_truthy(err)
+  end)
+end)
