@@ -1,0 +1,47 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+    test:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v3
+        - uses: rhysd/action-setup-vim@v1
+          with:
+            neovim: true
+            version: nightly
+        - uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+            profile: minimal
+            override: true
+        - name: Cache Cargo artifacts
+          uses: actions/cache@v3
+          with:
+            path: |
+              ~/.cargo/registry
+              ~/.cargo/git
+            key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+            restore-keys: |
+              ${{ runner.os }}-cargo-
+        - name: Cache Plenary.nvim
+          uses: actions/cache@v3
+          with:
+            path: $HOME/.local/share/nvim/site/pack/test/start/plenary.nvim
+            key: ${{ runner.os }}-plenary-${{ hashFiles('$HOME/.local/share/nvim/site/pack/test/start/plenary.nvim/README.md') }}
+        - name: Install dependencies
+          run: |
+            if [ ! -d "$HOME/.local/share/nvim/site/pack/test/start/plenary.nvim" ]; then
+              git clone --depth 1 https://github.com/nvim-lua/plenary.nvim \
+                "$HOME/.local/share/nvim/site/pack/test/start/plenary.nvim"
+            fi
+            cargo install --locked vimcats --features=cli
+        - name: Check docs
+          run: |
+            vimcats -fact $(tr '\n' ' ' < doclist) > /tmp/doc.txt
+            diff -u doc/swapdiff.nvim.txt /tmp/doc.txt
+        - name: Run tests
+          run: bash ./test.sh
