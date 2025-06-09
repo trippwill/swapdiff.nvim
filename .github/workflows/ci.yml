@@ -1,8 +1,12 @@
-name: PR Validation
+name: CI Validation
 
 on:
   pull_request:
     branches: [ "main" ]
+  push:
+    tags:
+      - '*'           # Triggers on any tag push
+  workflow_dispatch:   # Allows manual triggering from the Actions tab
 
 jobs:
     test:
